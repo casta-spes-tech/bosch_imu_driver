@@ -179,6 +179,19 @@ if __name__ == '__main__':
     frame_id = rospy.get_param('~frame_id', 'imu_link')
     frequency = rospy.get_param('frequency', 100)
     operation_mode = rospy.get_param('operation_mode', OPER_MODE_NDOF)
+    publish_mag = rospy.get_param('~publish_mag', False)
+    publish_raw = rospy.get_param('~publish_raw', False)
+ 
+    # Sensor measurements publishers
+    pub_data = rospy.Publisher('imu/data', Imu, queue_size=1)
+    if publish_raw:
+        pub_raw = rospy.Publisher('imu/raw', Imu, queue_size=1)
+    if publish_mag:
+        pub_mag = rospy.Publisher('imu/mag', MagneticField, queue_size=1)
+    pub_temp = rospy.Publisher('imu/temp', Temperature, queue_size=1)
+
+    # srv = Server(imuConfig, reconfig_callback)  # define dynamic_reconfigure callback
+
 
     # Open serial port
     rospy.loginfo("Opening serial port: %s...", port)
@@ -224,7 +237,8 @@ if __name__ == '__main__':
     rate = rospy.Rate(frequency)
 
     # Factors for unit conversions
-    acc_fact = 1000.0
+    q_fact = 16384.0
+    acc_fact = 100.0
     mag_fact = 16.0
     gyr_fact = 900.0
     seq = 0
@@ -254,28 +268,30 @@ if __name__ == '__main__':
             imu_data.header.stamp = rospy.Time.now()
             imu_data.header.frame_id = frame_id
             imu_data.header.seq = seq
-            imu_data.orientation.w = float(st.unpack('h', st.pack('BB', buf[24], buf[25]))[0])
-            imu_data.orientation.x = float(st.unpack('h', st.pack('BB', buf[26], buf[27]))[0])
-            imu_data.orientation.y = float(st.unpack('h', st.pack('BB', buf[28], buf[29]))[0])
-            imu_data.orientation.z = float(st.unpack('h', st.pack('BB', buf[30], buf[31]))[0])
+            imu_data.orientation_covariance = [0.0159,0,0,0,0.0159,0,0,0,0.0159]
+            imu_data.orientation.w = float(st.unpack('h', st.pack('BB', buf[24], buf[25]))[0]) / q_fact
+            imu_data.orientation.x = float(st.unpack('h', st.pack('BB', buf[26], buf[27]))[0]) / q_fact
+            imu_data.orientation.y = float(st.unpack('h', st.pack('BB', buf[28], buf[29]))[0]) / q_fact
+            imu_data.orientation.z = float(st.unpack('h', st.pack('BB', buf[30], buf[31]))[0]) / q_fact
             imu_data.linear_acceleration.x = float(st.unpack('h', st.pack('BB', buf[32], buf[33]))[0]) / acc_fact
             imu_data.linear_acceleration.y = float(st.unpack('h', st.pack('BB', buf[34], buf[35]))[0]) / acc_fact
             imu_data.linear_acceleration.z = float(st.unpack('h', st.pack('BB', buf[36], buf[37]))[0]) / acc_fact
-            imu_data.linear_acceleration_covariance[0] = -1
+            imu_data.linear_acceleration_covariance = [0.017,0,0,0,0.017,0,0,0,0.017]
             imu_data.angular_velocity.x = float(st.unpack('h', st.pack('BB', buf[12], buf[13]))[0]) / gyr_fact
             imu_data.angular_velocity.y = float(st.unpack('h', st.pack('BB', buf[14], buf[15]))[0]) / gyr_fact
             imu_data.angular_velocity.z = float(st.unpack('h', st.pack('BB', buf[16], buf[17]))[0]) / gyr_fact
-            imu_data.angular_velocity_covariance[0] = -1
+            imu_data.angular_velocity_covariance = [0.04,0,0,0,0.04,0,0,0,0.04]
             pub_data.publish(imu_data)
 
             # Publish magnetometer data
-            mag_msg.header.stamp = rospy.Time.now()
-            mag_msg.header.frame_id = frame_id
-            mag_msg.header.seq = seq
-            mag_msg.magnetic_field.x = float(st.unpack('h', st.pack('BB', buf[6], buf[7]))[0]) / mag_fact
-            mag_msg.magnetic_field.y = float(st.unpack('h', st.pack('BB', buf[8], buf[9]))[0]) / mag_fact
-            mag_msg.magnetic_field.z = float(st.unpack('h', st.pack('BB', buf[10], buf[11]))[0]) / mag_fact
-            pub_mag.publish(mag_msg)
+            if publish_mag:
+                mag_msg.header.stamp = rospy.Time.now()
+                mag_msg.header.frame_id = frame_id
+                mag_msg.header.seq = seq
+                mag_msg.magnetic_field.x = float(st.unpack('h', st.pack('BB', buf[6], buf[7]))[0]) / mag_fact
+                mag_msg.magnetic_field.y = float(st.unpack('h', st.pack('BB', buf[8], buf[9]))[0]) / mag_fact
+                mag_msg.magnetic_field.z = float(st.unpack('h', st.pack('BB', buf[10], buf[11]))[0]) / mag_fact
+                pub_mag.publish(mag_msg)
 
             # Publish temperature
             temperature_msg.header.stamp = rospy.Time.now()

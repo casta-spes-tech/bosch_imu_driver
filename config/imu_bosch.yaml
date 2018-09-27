@@ -1,5 +1,5 @@
 # USB port
-port: /dev/ttyUSB0
+port: /dev/ttyACM1
 # Tf frame id
 frame_id: imu_bosch_link
 # Data reading frequency
