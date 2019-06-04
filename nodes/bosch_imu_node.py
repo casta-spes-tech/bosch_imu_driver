@@ -103,6 +103,10 @@ PWR_MODE_NORMAL = 0x00
 PWR_MODE_LOW = 0x01
 PWR_MODE_SUSPEND  = 0x02
 
+#axis
+AXIS_CONF = 0x21
+AXIS_SIGN = 0x02
+
 # Communication constants
 BNO055_ID = 0xa0
 START_BYTE_WR = 0xaa
@@ -136,7 +140,7 @@ def read_from_dev(ser, reg_addr, length):
             continue
 
         if buf_in[0] == START_BYTE_ERR:
-            rospy.loginfo("Something bad when reading")
+            rospy.logerr("Missing start byte")
             return 0
 
         if buf_in[0] != START_BYTE_RESP:
@@ -193,10 +197,12 @@ if __name__ == '__main__':
     # Get parameters values
     port = rospy.get_param('~port', '/dev/ttyUSB0')
     frame_id = rospy.get_param('~frame_id', 'imu_link')
-    frequency = rospy.get_param('frequency', 100)
+    frequency = rospy.get_param('~frequency', 100)
     operation_mode = rospy.get_param('operation_mode', OPER_MODE_NDOF)
     publish_mag = rospy.get_param('~publish_mag', False)
     publish_raw = rospy.get_param('~publish_raw', False)
+    axis_map = rospy.get_param('~axis_map', AXIS_CONF)
+    axis_map_sign = rospy.get_param('~axis_map_sign', AXIS_SIGN)
  
     # Sensor measurements publishers
     pub_data = rospy.Publisher('imu/data', Imu, queue_size=1)
@@ -236,19 +242,25 @@ if __name__ == '__main__':
     if not(write_to_dev(ser, SYS_TRIGGER, 1, 0x00)):
         rospy.logerr("Unable to start IMU.")
 
-    if not(write_to_dev(ser, UNIT_SEL, 1, 0x83)):
+    if not(write_to_dev(ser, UNIT_SEL, 1, 0x82)):
         rospy.logerr("Unable to set IMU units.")
 
-    if not(write_to_dev(ser, AXIS_MAP_CONFIG, 1, 0x24)):
+    if not(write_to_dev(ser, AXIS_MAP_CONFIG, 1, axis_map)):
         rospy.logerr("Unable to remap IMU axis.")
+    else:
+        rospy.loginfo("axis_map config set to " + str(axis_map))
 
-    if not(write_to_dev(ser, AXIS_MAP_SIGN, 1, 0x06)):
+    if not(write_to_dev(ser, AXIS_MAP_SIGN, 1, axis_map_sign)):
         rospy.logerr("Unable to set IMU axis signs.")
+    else:
+        rospy.loginfo("axis_map_sign set to " + str(axis_map_sign))
 
-    if not(write_to_dev(ser, OPER_MODE, 1, OPER_MODE_NDOF)):
+    if not(write_to_dev(ser, OPER_MODE, 1, operation_mode)):
         rospy.logerr("Unable to set IMU operation mode into operation mode.")
 
     rospy.loginfo("Bosch BNO055 IMU configuration complete.")
+
+    rospy.loginfo("Imu frequency " + str(frequency))
 
     rate = rospy.Rate(frequency)
 
